@@ -176,6 +176,45 @@ def api_sales_list():
     return jsonify([dict(r) for r in rows])
 
 
+@app.route("/api/sales/<int:sale_id>", methods=["DELETE"])
+def api_delete_sale(sale_id):
+    db = get_db()
+    cur = get_cursor(db)
+
+    try:
+        cur.execute(
+            "SELECT storeid, productid, quantitysold FROM sales WHERE saleid = %s",
+            (sale_id,),
+        )
+        sale = cur.fetchone()
+
+        if sale is None:
+            return jsonify({"success": False, "errors": ["Sale not found."]}), 404
+
+        cur.execute(
+            """UPDATE inventory
+               SET stockquantity = stockquantity + %s
+               WHERE storeid = %s AND productid = %s""",
+            (sale["quantitysold"], sale["storeid"], sale["productid"]),
+        )
+
+        if cur.rowcount == 0:
+            raise RuntimeError("Unable to restore stock: inventory record not found.")
+
+        cur.execute(
+            "DELETE FROM sales WHERE saleid = %s",
+            (sale_id,),
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        return jsonify({"success": False, "errors": [str(exc)]}), 500
+    finally:
+        cur.close()
+
+    return jsonify({"success": True, "message": "Sale deleted and inventory restored."})
+
+
 # ── API: Record a sale (POST) ───────────────────────────────────────
 @app.route("/api/sales", methods=["POST"])
 def api_record_sale():

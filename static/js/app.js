@@ -158,7 +158,7 @@ async function fetchSales() {
         tbody.innerHTML = '';
         
         if (sales.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4">No sales recorded yet.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">No sales recorded yet.</td></tr>';
         } else {
             sales.forEach(sale => {
                 const tr = document.createElement("tr");
@@ -169,15 +169,54 @@ async function fetchSales() {
                     <td class="fw-semibold">${sale.productname}</td>
                     <td class="text-center">${sale.quantitysold}</td>
                     <td class="text-end fw-bold text-success">₹${Number(sale.totalamount).toFixed(2)}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-danger shadow-none" onclick="deleteSale(event, ${sale.saleid})" title="Delete sale">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
         }
     } catch (err) {
         console.error("Failed to load sales", err);
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger py-4">Error loading sales data.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4">Error loading sales data.</td></tr>';
     } finally {
         document.getElementById("refresh-sales-btn").innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh';
+    }
+}
+
+async function deleteSale(event, saleId) {
+    if (!confirm("Delete this sale and restore stock?")) {
+        return;
+    }
+
+    const button = event.target.closest("button");
+    if (button) {
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+    }
+
+    try {
+        const response = await fetch(`/api/sales/${saleId}`, { method: "DELETE" });
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            showAlert(data.message, "success");
+            fetchSales();
+            fetchInventory();
+            fetchStats();
+        } else {
+            showAlert(data.errors ? data.errors.join("<br>") : "Unable to delete sale.", "danger");
+        }
+    } catch (err) {
+        console.error("Delete sale error:", err);
+        showAlert("A network error occurred while deleting the sale.", "danger");
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = '<i class="bi bi-trash"></i>';
+        }
     }
 }
 
